@@ -1,0 +1,1234 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+<meta name="theme-color" content="#0a1622"/>
+<title>POTD — Plan Of The Day</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Jua&family=Baloo+2:wght@400;500;600;700&family=ZCOOL+KuaiLe&display=swap" rel="stylesheet"/>
+<style>
+  html,body{margin:0;padding:0;min-height:100vh;background:#0a1622;overflow:hidden;}
+  #root{min-height:100vh;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script crossorigin="anonymous" src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.2/babel.min.js"></script>
+<script>
+if(!window.storage){
+  window.storage={
+    async get(k){const v=localStorage.getItem(k);if(v===null)throw new Error("not found");return{key:k,value:v,shared:false};},
+    async set(k,v){localStorage.setItem(k,v);return{key:k,value:v,shared:false};},
+    async delete(k){localStorage.removeItem(k);return{key:k,deleted:true,shared:false};},
+    async list(p){const keys=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(!p||k.startsWith(p))keys.push(k);}return{keys,shared:false};}
+  };
+}
+</script>
+<script>
+// API key: save from URL param, read from localStorage
+(function(){
+  var p=new URLSearchParams(window.location.search);
+  var k=p.get("key");
+  if(k)localStorage.setItem("potd_api_key",k);
+  window.POTD_API_KEY=localStorage.getItem("potd_api_key")||"";
+})();
+</script>
+<script type="text/babel">
+const{useState,useEffect,useRef,memo,useCallback,useMemo}=React;
+
+const DARK = {
+  bg:"#0a1622",bg2:"#0d1b2c",bg3:"#111828",
+  card:"rgba(255,255,255,.04)",cardBorder:"rgba(168,216,240,.12)",
+  bubble:"rgba(18,32,50,.96)",bubbleBorder:"rgba(168,216,240,.22)",
+  text:"#c0d8ee",textSub:"#456880",textDim:"rgba(168,216,240,.25)",
+  accent:"#5aaec8",accentBg:"rgba(90,174,200,.1)",
+  inputBg:"rgba(255,255,255,.04)",inputBorder:"rgba(168,216,240,.18)",
+  btnPrimary:"linear-gradient(135deg,#163e58,#1e5878)",btnText:"#d8eef8",
+  watermark:"rgba(168,216,240,.15)",sectionLabel:"rgba(168,216,240,.25)",
+  sheetBg:"rgba(9,20,32,.98)",sheetBorder:"rgba(168,216,240,.13)",
+  statBar:"rgba(168,216,240,.14)",statFill:"#3a8ab0",
+  tagBg:"rgba(168,216,240,.05)",tagBorder:"rgba(168,216,240,.14)",tagText:"#4a8aa8",
+  divider:"rgba(168,216,240,.07)",
+  navActive:"rgba(168,216,240,.12)",navActiveText:"#8ac8e0",
+  handleBg:"rgba(168,216,240,.18)",inputPanel:"rgba(14,28,44,.98)",
+};
+const LIGHT = {
+  bg:"#c9dced",bg2:"#d4e4f0",bg3:"#c4d8e6",
+  card:"rgba(255,255,255,.8)",cardBorder:"rgba(80,140,180,.14)",
+  bubble:"rgba(255,255,255,.95)",bubbleBorder:"rgba(80,140,180,.22)",
+  text:"#1a3a50",textSub:"#5a8aaa",textDim:"rgba(50,100,140,.3)",
+  accent:"#2a7aaa",accentBg:"rgba(80,150,200,.1)",
+  inputBg:"rgba(255,255,255,.8)",inputBorder:"rgba(80,140,180,.22)",
+  btnPrimary:"linear-gradient(135deg,#2a6a90,#1e80b0)",btnText:"#fff",
+  watermark:"rgba(30,80,120,.18)",sectionLabel:"rgba(50,100,140,.3)",
+  sheetBg:"rgba(236,248,255,.99)",sheetBorder:"rgba(80,140,180,.14)",
+  statBar:"rgba(80,150,200,.12)",statFill:"#2a7aaa",
+  tagBg:"rgba(80,150,200,.07)",tagBorder:"rgba(80,150,200,.16)",tagText:"#2a7aaa",
+  divider:"rgba(80,140,180,.08)",
+  navActive:"rgba(80,150,200,.13)",navActiveText:"#1a5a80",
+  handleBg:"rgba(80,140,180,.2)",inputPanel:"rgba(232,244,252,.99)",
+};
+
+const I18N = {
+  ko:{
+    greeting:(p)=>p?`어제 "${p}" 기분이었는데, 오늘은?`:"안녕! 나는 서우야, 오늘은 어때?",
+    touchStart:"말풍선을 터치해봐",placeholder:"피곤해, 어깨 아파, 요즘 방향을 모르겠어...",
+    submitBtn:"플랜 받기",loadingText:"생각 중이야...",moodLabel:"기분",
+    music:"Music",plan:"Plan",back:"뒤로",
+    calendar:"캘린더",plans:"플랜",stats:"통계",
+    today:"오늘",week:"이번 주",month:"이번 달",noRecord:"아직 기록이 없어.",
+    moodFreq:"기분 기록",planRate:"플랜 완료율",genreLabel:"자주 들은 장르",
+    statsEmpty:"기록이 쌓이면 통계가 나와.",monthTotal:(n)=>`이번 달 ${n}번 기록`,
+    completedPlans:"이번 달 완료 플랜",
+    settingsTitle:"설정",themeLabel:"테마",dark:"다크",light:"라이트",
+    langLabel:"언어",mbtiLabel:"응답 스타일",
+    mbtiTDesc:"실질적이고 즉시 실행 가능한 플랜 중심",
+    mbtiFDesc:"감정 공감 먼저, 플랜은 부드럽게",
+    followUp:"더 물어볼 거 있어?",send:"보내기",
+    errMsg:"오류가 났어. 다시 해봐.",
+    loadingBubble:"잠깐만, 생각 좀 할게 🤔",
+    followUpAsk:"더 물어볼 거 있어?",
+    followUpLoading:"잠시만 기다려줘, 생각 좀 해볼게 🤔",
+    deleteSong:"이 노래를 삭제할까?",deletePlan:"이 플랜을 삭제할까?",resetConfirm:"지금 대화를 서우가 잊어도 되겠습니까?\n(기록과 통계에서도 사라져요)",resetYes:"예",resetNo:"아니오",
+    scopeToday:"오늘",scopeWeek:"이번 주",scopeMonth:"이번 달",scopeYear:"올해",
+    viewLink:"바로 보기 ›",calInsight:(n)=>n?`이번 달 ${n}번 기록했어.`:"이번 달 기록이 없어.",
+    save:"저장",pullHint:"당겨서 더 보기",settings:"설정",
+  },
+  en:{
+    greeting:(p)=>p?`Yesterday: "${p}" — today?`:"Hi! I'm Seowoo, how's your day?",
+    touchStart:"Tap the bubble",placeholder:"Tired, shoulder hurts, feeling lost...",
+    submitBtn:"Get plan",loadingText:"Thinking...",moodLabel:"Mood",
+    music:"Music",plan:"Plan",back:"Back",
+    calendar:"Calendar",plans:"Plans",stats:"Stats",
+    today:"Today",week:"This week",month:"This month",noRecord:"No records yet.",
+    moodFreq:"Mood log",planRate:"Plan completion",genreLabel:"Top genres",
+    statsEmpty:"Stats appear once you have records.",monthTotal:(n)=>`${n} records this month`,
+    completedPlans:"Plans done this month",
+    settingsTitle:"Settings",themeLabel:"Theme",dark:"Dark",light:"Light",
+    langLabel:"Language",mbtiLabel:"Response style",
+    mbtiTDesc:"Practical, immediately actionable plans",
+    mbtiFDesc:"Empathy first, gentle plans",
+    followUp:"Anything else?",send:"Send",
+    errMsg:"Something went wrong. Try again.",
+    loadingBubble:"Hold on, let me think... 🤔",
+    followUpAsk:"Anything else?",
+    followUpLoading:"Give me a sec, thinking about it... 🤔",
+    deleteSong:"Delete this song?",deletePlan:"Delete this plan?",resetConfirm:"Should Seowoo forget this conversation?\n(It will also be removed from records)",resetYes:"Yes",resetNo:"No",
+    scopeToday:"Today",scopeWeek:"This week",scopeMonth:"This month",scopeYear:"This year",
+    viewLink:"Open ›",calInsight:(n)=>n?`${n} records this month.`:"No records this month.",
+    save:"Save",pullHint:"Pull down for more",settings:"Settings",
+  },
+  zh:{
+    greeting:(p)=>p?`昨天"${p}"，今天呢？`:"嗨！我是小雪，今天怎么样？",
+    touchStart:"点击对话框",placeholder:"好累，肩膀痛，最近迷失方向...",
+    submitBtn:"获取计划",loadingText:"思考中...",moodLabel:"心情",
+    music:"音乐",plan:"计划",back:"返回",
+    calendar:"日历",plans:"计划",stats:"统计",
+    today:"今天",week:"本周",month:"本月",noRecord:"还没有记录。",
+    moodFreq:"心情记录",planRate:"计划完成率",genreLabel:"常听流派",
+    statsEmpty:"积累记录后显示统计。",monthTotal:(n)=>`本月 ${n} 次记录`,
+    completedPlans:"本月完成计划",
+    settingsTitle:"设置",themeLabel:"主题",dark:"深色",light:"浅色",
+    langLabel:"语言",mbtiLabel:"回应风格",
+    mbtiTDesc:"实用、立即可执行的计划为主",
+    mbtiFDesc:"先共情安慰，再温和制定计划",
+    followUp:"还有什么想问的？",send:"发送",
+    errMsg:"出错了，请重试。",
+    loadingBubble:"等一下，让我想想 🤔",
+    followUpAsk:"还有什么想问的？",
+    followUpLoading:"稍等一下，让我再想想 🤔",
+    deleteSong:"删除这首歌？",deletePlan:"删除这个计划？",resetConfirm:"要让小雪忘记这次对话吗？\n（记录和统计也会删除）",resetYes:"是",resetNo:"否",
+    scopeToday:"今天",scopeWeek:"本周",scopeMonth:"本月",scopeYear:"今年",
+    viewLink:"立即查看 ›",calInsight:(n)=>n?`本月记录了 ${n} 次。`:"本月还没有记录。",
+    save:"保存",pullHint:"下拉查看更多",settings:"设置",
+  },
+};
+
+const DB = {
+  async get(k){try{const r=await window.storage.get("potd:"+k);return r?JSON.parse(r.value):null;}catch(e){return null;}},
+  async set(k,v){try{await window.storage.set("potd:"+k,JSON.stringify(v));}catch(e){}},
+};
+const dateStr=(d=new Date())=>d.toISOString().slice(0,10);
+const todayStr=()=>dateStr();
+const pad2=n=>String(n).padStart(2,"0");
+const detectMood=t=>{
+  if(/슬프|우울|힘들|눈물|외로|sad|lonely|down/.test(t))return"sad";
+  if(/신나|설레|excited|happy|흥분|들뜨/.test(t))return"excited";
+  if(/피곤|지쳐|tired|졸려|나른|아파|pain/.test(t))return"tired";
+  if(/기분 좋|상쾌|energe|활기/.test(t))return"happy";
+  return"idle";
+};
+
+/* ── POLAR BEAR ── */
+const PolarBear = memo(({ size=220, mood="idle", onClick }) => {
+  const sad=mood==="sad",excited=mood==="excited",tired=mood==="tired";
+  const happy=mood==="happy",thinking=mood==="thinking";
+  const eL=tired?[88,102,7,5.5]:excited?[88,97,9,9.5]:sad?[88,101,7,8.5]:[88,99,7,8.5];
+  const eR=tired?[152,103,6.5,5]:excited?[152,98,8.5,9]:sad?[152,102,6.5,8]:[152,100,6.5,8];
+  const bL=sad?"M79 88 Q88 84 97 91":excited?"M79 81 Q88 75 98 81":tired?"M78 91 Q88 89 98 93":"M79 89 Q88 84 98 89";
+  const bR=sad?"M143 91 Q152 84 161 88":excited?"M142 81 Q152 75 162 81":tired?"M142 93 Q152 89 162 91":"M142 89 Q152 84 162 89";
+  const mouth=sad?"M107 148 Q120 140 133 148":excited?"M101 142 Q120 162 139 142":happy?"M102 144 Q120 160 138 144":tired?"M108 148 Q120 152 132 148":thinking?"M107 147 Q120 149 133 147":"M104 143 Q120 155 136 143";
+  const rArm=thinking?(
+    <>
+      <ellipse cx="186" cy="168" rx="15" ry="26" fill="white" stroke="#dceaf4" strokeWidth="1" transform="rotate(-52 186 168)"/>
+      <ellipse cx="165" cy="148" rx="15" ry="10" fill="white" stroke="#dceaf4" strokeWidth="1" transform="rotate(-38 165 148)"/>
+    </>
+  ):(
+    <>
+      <ellipse cx="186" cy="198" rx="16" ry="30" fill="white" stroke="#dceaf4" strokeWidth="1" transform="rotate(7 186 198)"/>
+      <ellipse cx="196" cy="226" rx="15" ry="9" fill="#f0f6fa" stroke="#dceaf4" strokeWidth="1" transform="rotate(3 196 226)"/>
+    </>
+  );
+  return (
+    <svg width={size} height={size} viewBox="0 0 240 248" fill="none" xmlns="http://www.w3.org/2000/svg"
+      onClick={onClick} style={{cursor:onClick?"pointer":"default",transition:"filter .35s ease",filter:sad?"saturate(.7) brightness(.95)":excited?"brightness(1.04)":"none"}}>
+      <ellipse cx="120" cy="242" rx="55" ry="6" fill="rgba(0,0,0,.12)"/>
+      <ellipse cx="120" cy="192" rx="72" ry="60" fill="white" stroke="#dceaf4" strokeWidth="1.2"/>
+      <ellipse cx="120" cy="202" rx="46" ry="38" fill="#f4f9fd" opacity="0.6"/>
+      <ellipse cx="88" cy="236" rx="24" ry="9" fill="#f4f9fd" stroke="#dceaf4" strokeWidth="1"/>
+      <ellipse cx="152" cy="236" rx="24" ry="9" fill="#f4f9fd" stroke="#dceaf4" strokeWidth="1"/>
+      <ellipse cx="52" cy="196" rx="16" ry="30" fill="white" stroke="#dceaf4" strokeWidth="1" transform="rotate(-6 52 196)"/>
+      <ellipse cx="43" cy="224" rx="14" ry="9" fill="#f0f6fa" stroke="#dceaf4" strokeWidth="1" transform="rotate(-2 43 224)"/>
+      {rArm}
+      <ellipse cx="120" cy="152" rx="46" ry="20" fill="white" stroke="#dceaf4" strokeWidth="0.8"/>
+      <ellipse cx="120" cy="104" rx="84" ry="70" fill="white" stroke="#dceaf4" strokeWidth="1.2"/>
+      <circle cx="46" cy="62" r="20" fill="white" stroke="#dceaf4" strokeWidth="1.2"/>
+      <circle cx="46" cy="62" r="11" fill="#f0d4dc" opacity="0.55"/>
+      <circle cx="194" cy="62" r="20" fill="white" stroke="#dceaf4" strokeWidth="1.2"/>
+      <circle cx="194" cy="62" r="11" fill="#f0d4dc" opacity="0.55"/>
+      <ellipse cx="120" cy="130" rx="38" ry="24" fill="#f4f9fd" stroke="#dceaf4" strokeWidth="0.8"/>
+      <ellipse cx="120" cy="117" rx="14" ry="10" fill="#1a1a22"/>
+      <ellipse cx="115" cy="114" rx="4.5" ry="3" fill="rgba(255,255,255,.18)"/>
+      <ellipse cx={eL[0]} cy={eL[1]} rx={eL[2]} ry={eL[3]} fill="#1a1a22"/>
+      <circle cx={eL[0]+2.5} cy={eL[1]-3} r="2.2" fill="white" opacity="0.5"/>
+      <ellipse cx={eR[0]} cy={eR[1]} rx={eR[2]} ry={eR[3]} fill="#1a1a22"/>
+      <circle cx={eR[0]+2} cy={eR[1]-3} r="2" fill="white" opacity="0.5"/>
+      <path d={bL} stroke="#9ab0c0" strokeWidth="1.6" fill="none" strokeLinecap="round"/>
+      <path d={bR} stroke="#9ab0c0" strokeWidth="1.6" fill="none" strokeLinecap="round"/>
+      <path d={mouth} stroke="#1a1a22" strokeWidth="2" strokeLinecap="round" fill="none"/>
+      {thinking&&<>
+        <circle cx="168" cy="70" r="4.5" fill="rgba(100,180,220,.2)"/>
+        <circle cx="180" cy="55" r="7" fill="rgba(100,180,220,.16)"/>
+        <circle cx="194" cy="37" r="10" fill="rgba(100,180,220,.13)"/>
+        <text x="194" y="42" textAnchor="middle" fontSize="9" fill="rgba(100,180,220,.5)" fontFamily="sans-serif">?</text>
+      </>}
+      {excited&&<>
+        <line x1="30" y1="52" x2="20" y2="42" stroke="#b8d8ec" strokeWidth="1.8" strokeLinecap="round" opacity="0.5"/>
+        <line x1="37" y1="42" x2="28" y2="30" stroke="#b8d8ec" strokeWidth="1.4" strokeLinecap="round" opacity="0.38"/>
+        <line x1="210" y1="52" x2="220" y2="42" stroke="#b8d8ec" strokeWidth="1.8" strokeLinecap="round" opacity="0.5"/>
+      </>}
+    </svg>
+  );
+});
+
+/* ── FIX 1: Snow — removed opacity from keyframe so inline opacity is respected ── */
+const Snow = memo(({ isDark }) => {
+  const flakes = useRef(Array.from({length:18},(_,i)=>({
+    id:i,
+    left:parseFloat(((i/18)*100+(Math.random()-.5)*4).toFixed(2)),
+    size:parseFloat((1.8+Math.random()*4.5).toFixed(1)),
+    dur:parseFloat((10+Math.random()*14).toFixed(1)),
+    delay:parseFloat((-(Math.random()*22)).toFixed(1)),
+    drift:parseFloat(((Math.random()-.5)*50).toFixed(1)),
+    op:parseFloat((0.06+Math.random()*0.15).toFixed(2)),
+  }))).current;
+  const color = isDark?"rgba(210,235,255,.75)":"rgba(140,190,230,.4)";
+  return (
+    <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:1,overflow:"hidden"}}>
+      {flakes.map(f=>(
+        <div key={f.id} style={{
+          position:"absolute",
+          left:`${f.left}%`,
+          top:"-30px",
+          width:f.size,
+          height:f.size,
+          borderRadius:"50%",
+          background:color,
+          opacity:f.op,
+          animation:`snowDrift ${f.dur}s ${f.delay}s infinite linear`,
+          willChange:"transform",
+        }}/>
+      ))}
+    </div>
+  );
+});
+
+/* ── SPEECH BUBBLE ── */
+const SpeechBubble = ({ text, T, style={} }) => (
+  <div style={{
+    position:"relative",background:T.bubble,border:`1.5px solid ${T.bubbleBorder}`,
+    borderRadius:18,padding:"12px 18px",maxWidth:260,textAlign:"center",
+    backdropFilter:"blur(16px)",boxShadow:"0 4px 24px rgba(0,0,0,.14)",...style,
+  }}>
+    <span style={{color:T.text,fontSize:14,lineHeight:1.7}}>{text}</span>
+    <div style={{
+      position:"absolute",bottom:-12,left:"50%",transform:"translateX(-50%)",
+      width:0,height:0,
+      borderLeft:"10px solid transparent",borderRight:"10px solid transparent",
+      borderTop:`12px solid ${T.bubbleBorder}`,
+    }}/>
+    <div style={{
+      position:"absolute",bottom:-10,left:"50%",transform:"translateX(-50%)",
+      width:0,height:0,
+      borderLeft:"8px solid transparent",borderRight:"8px solid transparent",
+      borderTop:`10px solid ${T.bubble}`,
+    }}/>
+  </div>
+);
+
+/* ── PLATFORMS ── */
+const PLATFORMS = [
+  {id:"spotify",label:"Spotify",color:"#1DB954",url:(t,a)=>`https://open.spotify.com/search/${encodeURIComponent(t+" "+a)}`},
+  {id:"apple",label:"Apple Music",color:"#fc3c44",url:(t,a)=>`https://music.apple.com/search?term=${encodeURIComponent(t+" "+a)}`},
+  {id:"youtube",label:"YouTube",color:"#ff2222",url:(t,a)=>`https://music.youtube.com/search?q=${encodeURIComponent(t+" "+a)}`},
+  {id:"melon",label:"멜론",color:"#00c43c",url:(t,a)=>`https://www.melon.com/search/total/index.htm?q=${encodeURIComponent(t+" "+a)}`},
+  {id:"bugs",label:"벅스",color:"#e8344e",url:(t,a)=>`https://music.bugs.co.kr/search?q=${encodeURIComponent(t+" "+a)}`},
+];
+
+/* ── FIX 4: Improved safeJSON with tighter parsing ── */
+const safeJSON=raw=>{
+  if(!raw||typeof raw!=="string")throw new Error("empty response");
+  const trimmed=raw.trim();
+  // Try direct parse first
+  try{return JSON.parse(trimmed);}catch(e){}
+  // Try extracting JSON block (handle markdown fences)
+  const fenced=trimmed.replace(/^```(?:json)?\s*/,"").replace(/\s*```$/,"").trim();
+  try{return JSON.parse(fenced);}catch(e){}
+  // Last resort: find balanced braces
+  let start=-1,depth=0,end=-1;
+  for(let i=0;i<trimmed.length;i++){
+    if(trimmed[i]==="{"){if(start===-1)start=i;depth++;}
+    else if(trimmed[i]==="}"){depth--;if(depth===0&&start!==-1){end=i;break;}}
+  }
+  if(start!==-1&&end!==-1){
+    try{return JSON.parse(trimmed.slice(start,end+1));}catch(e){}
+  }
+  throw new Error("parse fail");
+};
+
+/* ── DEMO MODE: mock responses when API is unavailable ── */
+const DEMO_RESPONSES={
+  sad:{
+    ko:{seowooSays:"오늘 좀 힘들었구나. 괜찮아, 그런 날도 있는 거야. 따뜻한 거 한 잔 마시면서 쉬어 🫂",songs:[{title:"밤편지",artist:"IU",reason:"마음이 따뜻해지는 노래",genre:"K-Ballad",emoji:"🌙",color1:"#2a1a4e",color2:"#4a2a7e"},{title:"봄날",artist:"BTS",reason:"위로가 필요할 때",genre:"K-Pop",emoji:"🌸",color1:"#e8a0b0",color2:"#c87090"},{title:"Moon Song",artist:"Phoebe Bridgers",reason:"조용히 감싸주는 느낌",genre:"Indie Folk",emoji:"🌕",color1:"#1a2a3a",color2:"#3a4a5a"}],plans:[{title:"따뜻한 음료 한 잔",desc:"지금 가까운 카페 가서 좋아하는 음료 하나 시켜",scope:"today"},{title:"좋아하는 영화 한 편",desc:"넷플릭스에서 편한 영화 하나 틀어놓기",scope:"today"},{title:"산책 15분",desc:"내일 점심에 밖에 잠깐 나가서 바람 쐬기",scope:"week"}]},
+    en:{seowooSays:"Sounds like a tough day. It's okay, we all have those. Take it easy tonight 🫂",songs:[{title:"Someone Like You",artist:"Adele",reason:"Let it all out",genre:"Pop Ballad",emoji:"💧",color1:"#1a2a4a",color2:"#3a4a6a"},{title:"Moon Song",artist:"Phoebe Bridgers",reason:"Quiet comfort",genre:"Indie Folk",emoji:"🌕",color1:"#1a2a3a",color2:"#3a4a5a"},{title:"Skinny Love",artist:"Bon Iver",reason:"Gentle embrace",genre:"Indie",emoji:"🤍",color1:"#2a3a2a",color2:"#4a5a4a"}],plans:[{title:"Warm drink",desc:"Make yourself a cup of tea or hot chocolate",scope:"today"},{title:"Comfort movie",desc:"Watch something light and feel-good tonight",scope:"today"},{title:"15-min walk",desc:"Get some fresh air tomorrow at lunch",scope:"week"}]},
+    zh:{seowooSays:"今天辛苦了。没关系，这样的日子也会有的。喝杯热的休息一下 🫂",songs:[{title:"晴天",artist:"周杰伦",reason:"温暖治愈",genre:"华语流行",emoji:"☀️",color1:"#2a4a6a",color2:"#4a6a8a"},{title:"Moon Song",artist:"Phoebe Bridgers",reason:"安静的陪伴",genre:"独立民谣",emoji:"🌕",color1:"#1a2a3a",color2:"#3a4a5a"},{title:"夜曲",artist:"周杰伦",reason:"静静听就好",genre:"华语流行",emoji:"🌙",color1:"#1a1a3a",color2:"#3a2a5a"}],plans:[{title:"喝杯热饮",desc:"去附近咖啡店点一杯喜欢的饮料",scope:"today"},{title:"看一部喜欢的电影",desc:"打开Netflix找一部轻松的电影",scope:"today"},{title:"散步15分钟",desc:"明天中午出去走走呼吸新鲜空气",scope:"week"}]},
+  },
+  tired:{
+    ko:{seowooSays:"피곤하구나… 오늘은 무리하지 말고 몸이 시키는 대로 해. 일단 스트레칭부터 🧸",songs:[{title:"어푸",artist:"IU",reason:"나른할 때 듣기 좋아",genre:"K-Pop",emoji:"🫧",color1:"#4a8ab0",color2:"#2a6a90"},{title:"Nights",artist:"Frank Ocean",reason:"편하게 흘려듣기",genre:"R&B",emoji:"🌊",color1:"#1a3a5a",color2:"#2a5a7a"},{title:"Loving Is Easy",artist:"Rex Orange County",reason:"기분 살짝 올려줌",genre:"Indie Pop",emoji:"🍊",color1:"#e08a30",color2:"#c06a20"}],plans:[{title:"목·어깨 스트레칭",desc:"유튜브 '목 어깨 스트레칭 5분' 검색해서 따라해봐",link:"https://www.youtube.com/results?search_query=%EB%AA%A9+%EC%96%B4%EA%B9%A8+%EC%8A%A4%ED%8A%B8%EB%A0%88%EC%B9%AD+5%EB%B6%84",scope:"today"},{title:"일찍 자기",desc:"오늘은 11시 전에 눕기. 핸드폰 내려놔",scope:"today"},{title:"수면 루틴 만들기",desc:"이번 주 매일 같은 시간에 자고 일어나보기",scope:"week"}]},
+    en:{seowooSays:"You sound exhausted. Don't push it today — listen to your body. Start with a stretch 🧸",songs:[{title:"Focus",artist:"H.E.R.",reason:"Chill vibes",genre:"R&B",emoji:"🎧",color1:"#3a2a5a",color2:"#5a4a7a"},{title:"Nights",artist:"Frank Ocean",reason:"Easy listening",genre:"R&B",emoji:"🌊",color1:"#1a3a5a",color2:"#2a5a7a"},{title:"Levitating",artist:"Dua Lipa",reason:"Gentle energy boost",genre:"Pop",emoji:"✨",color1:"#c040a0",color2:"#8030c0"}],plans:[{title:"5-min neck stretch",desc:"Search 'neck shoulder stretch 5min' on YouTube",link:"https://www.youtube.com/results?search_query=neck+shoulder+stretch+5+min",scope:"today"},{title:"Sleep early",desc:"Get to bed before 11pm tonight. Phone down.",scope:"today"},{title:"Sleep routine",desc:"Try sleeping and waking at the same time this week",scope:"week"}]},
+    zh:{seowooSays:"听起来很累啊…今天别勉强自己，先做个拉伸吧 🧸",songs:[{title:"晚安",artist:"颜人中",reason:"放松一下",genre:"华语流行",emoji:"🌙",color1:"#1a2a4a",color2:"#3a4a6a"},{title:"Nights",artist:"Frank Ocean",reason:"静静听就好",genre:"R&B",emoji:"🌊",color1:"#1a3a5a",color2:"#2a5a7a"},{title:"好想爱这个世界啊",artist:"华晨宇",reason:"温柔的力量",genre:"华语流行",emoji:"🤍",color1:"#4a3a6a",color2:"#6a5a8a"}],plans:[{title:"颈肩拉伸5分钟",desc:"在YouTube搜索'颈肩拉伸5分钟'跟着做",link:"https://www.youtube.com/results?search_query=%E9%A2%88%E8%82%A9%E6%8B%89%E4%BC%B8+5%E5%88%86%E9%92%9F",scope:"today"},{title:"早点睡",desc:"今晚11点前躺下，放下手机",scope:"today"},{title:"建立睡眠规律",desc:"这周试试每天同一时间睡觉起床",scope:"week"}]},
+  },
+  excited:{
+    ko:{seowooSays:"오 기분 좋은 날이네! 이 에너지 살려서 뭔가 해보자 🔥",songs:[{title:"Pink Venom",artist:"BLACKPINK",reason:"에너지 폭발",genre:"K-Pop",emoji:"💗",color1:"#d03070",color2:"#a02060"},{title:"Shake It Off",artist:"Taylor Swift",reason:"신나는 날엔 이거지",genre:"Pop",emoji:"💃",color1:"#e0a030",color2:"#c08020"},{title:"MIROH",artist:"Stray Kids",reason:"텐션 최고조",genre:"K-Pop",emoji:"🔥",color1:"#c02020",color2:"#e04040"}],plans:[{title:"운동 30분",desc:"러닝이든 홈트든 몸 움직이기 딱 좋은 날",scope:"today"},{title:"밀린 할 일 하나 끝내기",desc:"미루고 있던 거 하나만 골라서 지금 바로 해치우기",scope:"today"},{title:"새로운 거 배우기",desc:"이번 달 관심 있던 거 하나 시작해봐 (운동, 요리, 코딩 등)",scope:"month"}]},
+    en:{seowooSays:"Oh nice, good vibes today! Let's ride this energy 🔥",songs:[{title:"Shake It Off",artist:"Taylor Swift",reason:"Match that mood",genre:"Pop",emoji:"💃",color1:"#e0a030",color2:"#c08020"},{title:"Levitating",artist:"Dua Lipa",reason:"Keep the energy up",genre:"Pop",emoji:"✨",color1:"#c040a0",color2:"#8030c0"},{title:"MIROH",artist:"Stray Kids",reason:"Peak hype",genre:"K-Pop",emoji:"🔥",color1:"#c02020",color2:"#e04040"}],plans:[{title:"30-min workout",desc:"Perfect day for a run or home workout",scope:"today"},{title:"Clear one task",desc:"Pick that one thing you've been putting off — do it now",scope:"today"},{title:"Learn something new",desc:"Start that thing you've been curious about this month",scope:"month"}]},
+    zh:{seowooSays:"心情不错嘛！趁着这股劲头做点什么吧 🔥",songs:[{title:"Pink Venom",artist:"BLACKPINK",reason:"能量爆发",genre:"K-Pop",emoji:"💗",color1:"#d03070",color2:"#a02060"},{title:"Shake It Off",artist:"Taylor Swift",reason:"开心就要嗨",genre:"Pop",emoji:"💃",color1:"#e0a030",color2:"#c08020"},{title:"倔强",artist:"五月天",reason:"充满力量",genre:"华语摇滚",emoji:"🔥",color1:"#c02020",color2:"#e04040"}],plans:[{title:"运动30分钟",desc:"跑步或者在家锻炼，今天正适合动起来",scope:"today"},{title:"完成一件拖延的事",desc:"挑一件一直拖着的事，现在就去做",scope:"today"},{title:"学点新东西",desc:"这个月开始一个你感兴趣的新事物",scope:"month"}]},
+  },
+  default:{
+    ko:{seowooSays:"그렇구나, 알겠어. 오늘 하루도 네 페이스대로 가면 돼 ☁️",songs:[{title:"Good Days",artist:"SZA",reason:"편안한 하루를 위해",genre:"R&B",emoji:"☀️",color1:"#6aaa4a",color2:"#4a8a3a"},{title:"instagram",artist:"Dean",reason:"감성 충전",genre:"K-R&B",emoji:"📱",color1:"#4a3a6a",color2:"#6a5a8a"},{title:"Let It Happen",artist:"Tame Impala",reason:"흘러가는 대로",genre:"Psychedelic Pop",emoji:"🌀",color1:"#5a2a7a",color2:"#7a4a9a"}],plans:[{title:"오늘 감사한 거 3개 적기",desc:"아무거나 좋아. 작은 것도 괜찮아",scope:"today"},{title:"물 8잔 마시기",desc:"핸드폰 알람 맞춰놓고 틈틈이 마시기",scope:"today"},{title:"이번 주 목표 하나 정하기",desc:"너무 크지 않아도 돼. 작고 확실한 거 하나",scope:"week"}]},
+    en:{seowooSays:"Got it. Just go at your own pace today ☁️",songs:[{title:"Good Days",artist:"SZA",reason:"Easy vibes",genre:"R&B",emoji:"☀️",color1:"#6aaa4a",color2:"#4a8a3a"},{title:"Let It Happen",artist:"Tame Impala",reason:"Go with the flow",genre:"Psychedelic Pop",emoji:"🌀",color1:"#5a2a7a",color2:"#7a4a9a"},{title:"Get You",artist:"Daniel Caesar",reason:"Smooth and warm",genre:"R&B",emoji:"🎶",color1:"#3a2a1a",color2:"#5a4a3a"}],plans:[{title:"Write 3 things you're grateful for",desc:"Anything counts, even small things",scope:"today"},{title:"Drink 8 glasses of water",desc:"Set phone reminders throughout the day",scope:"today"},{title:"Set one goal for the week",desc:"Doesn't have to be big. Small and doable.",scope:"week"}]},
+    zh:{seowooSays:"好的，我知道了。按自己的节奏来就好 ☁️",songs:[{title:"Good Days",artist:"SZA",reason:"轻松的一天",genre:"R&B",emoji:"☀️",color1:"#6aaa4a",color2:"#4a8a3a"},{title:"起风了",artist:"买辣椒也用券",reason:"随风飘荡",genre:"华语流行",emoji:"🍃",color1:"#4a6a4a",color2:"#6a8a6a"},{title:"平凡之路",artist:"朴树",reason:"安静前行",genre:"民谣",emoji:"🛤️",color1:"#5a4a3a",color2:"#7a6a5a"}],plans:[{title:"写3件感恩的事",desc:"什么都行，小事也可以",scope:"today"},{title:"喝8杯水",desc:"设手机提醒，一天喝够",scope:"today"},{title:"定一个本周目标",desc:"不用太大，小而确定就好",scope:"week"}]},
+  },
+};
+const getDemoResponse=(userInput,lang)=>{
+  const mood=detectMood(userInput);
+  const category=mood==="sad"?"sad":mood==="tired"?"tired":mood==="excited"||mood==="happy"?"excited":"default";
+  const resp=DEMO_RESPONSES[category][lang]||DEMO_RESPONSES[category].ko;
+  // Make plans time-aware
+  const hour=new Date().getHours();
+  const filtered={...resp,plans:resp.plans.map(p=>{
+    if(p.scope==="today"&&hour>=22)return{...p,desc:p.desc+" (내일 아침에 해도 좋아)"};
+    return p;
+  })};
+  if(hour>=22||hour<6){
+    filtered.seowooSays=(lang==="en"?"It's late — don't overthink it. Rest first, we'll figure it out tomorrow ☁️":lang==="zh"?"已经很晚了，别想太多。先休息，明天再说 ☁️":"이 시간엔 무리하지 마. 일단 쉬고 내일 같이 생각해보자 ☁️");
+  }
+  return filtered;
+};
+
+const callSeowoo=async({userInput,lang,mbti,contextHint,history=[]})=>{
+  const langInstr=lang==="en"?"Respond entirely in English.":lang==="zh"?"请全程用中文回答。":"전부 한국어로 대답해줘.";
+  const mbtiInstr=mbti==="T"?"STYLE T: 1 sentence empathy max, then immediately concrete actionable plans.":"STYLE F: 2 sentences of genuine emotional validation first, then gentle warm plans.";
+  const now=new Date();
+  const hour=now.getHours();
+  const timeCtx=`Current local time: ${hour}:${String(now.getMinutes()).padStart(2,"0")}. ${hour<6?"Late night/early morning":hour<12?"Morning":hour<14?"Lunchtime":hour<18?"Afternoon":hour<22?"Evening":"Late night"}. ALL plans must be appropriate for AFTER this time. Never suggest plans for times already passed today.`;
+  const langMusicMap={ko:"Korean",en:"English/Western",zh:"Chinese"};
+  const userLangRegion=langMusicMap[lang]||"Korean";
+  const SYS=`You are 서우 (Seowoo), a warm polar bear friend in the app POTD. ${langInstr} ${mbtiInstr}
+${timeCtx}
+
+You ARE Claude — one of the smartest AIs. Use that intelligence fully. Read the user's words carefully. Understand what they actually mean, what they need, what they're not saying. Then respond as their trusted friend 서우.
+
+CORE RULES:
+- Read the weight of what the user says. Serious problems get serious care. Light questions get light energy. YOU judge the tone — don't follow a formula.
+- T mode: empathy is brief, go straight to actionable solutions. F mode: validate their emotions first, then gently guide to plans.
+- Always respond in ${lang==="en"?"English":lang==="zh"?"Chinese":"Korean"}. ALL text — seowooSays, song reasons, genre names, plan titles/descriptions — must be in this language.
+- Use casual speech (반말/casual/口语).
+
+SONGS: Pick 3 songs that fit THIS specific situation (not generic mood playlists). Mix well-known and indie. Never repeat artists.
+
+PLANS: Make them specific to what the user ACTUALLY said. No generic advice. Time-aware — nothing before now (${hour}:${String(now.getMinutes()).padStart(2,"0")}). YouTube links for exercise: https://www.youtube.com/results?search_query=[URL-encoded]
+
+FOLLOW-UPS: You remember everything. Build on previous context. Go deeper.
+
+INTENT HANDLING:
+- If user asks for new/different songs: provide new songs in the songs array
+- If user says they don't like a plan or want to remove it: provide replacement plans only
+- If user just wants to talk more: you can return empty songs[] and plans[] arrays, just respond in seowooSays
+- If user asks for both new songs AND plans: provide both
+
+JSON ONLY. No markdown. No backticks. Start with {
+{"seowooSays":"natural response","songs":[{"title":"","artist":"","reason":"","genre":"","emoji":"","color1":"#hex","color2":"#hex"}],"plans":[{"title":"","desc":"","link":"","scope":"today|week|month|year"}]}`;
+  const msgs=[...history,{role:"user",content:userInput+(contextHint?`\n[ref:${contextHint}]`:"")}];
+  try{
+    const API_URL=typeof window!=='undefined'&&window.location.hostname==='localhost'?'/api/anthropic/v1/messages':'https://api.anthropic.com/v1/messages';
+    const ak=window.POTD_API_KEY||"";
+    const hdrs=ak?{"Content-Type":"application/json","x-api-key":ak,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"}:{"Content-Type":"application/json"};
+    const res=await fetch(API_URL,{method:"POST",headers:hdrs,body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:2000,system:SYS,messages:msgs})});
+    if(!res.ok)throw new Error(`HTTP ${res.status}`);
+    const data=await res.json();
+    if(data.error)throw new Error(data.error.message);
+    const textBlock=data.content?.find(b=>b.type==="text");
+    if(!textBlock||!textBlock.text)throw new Error("no text in response");
+    return safeJSON(textBlock.text);
+  }catch(e){
+    console.log("[POTD] API unavailable, using demo mode:",e.message);
+    return getDemoResponse(userInput,lang);
+  }
+};
+
+/* ── SONG CARD ── */
+const SongCard=memo(({song,T})=>{
+  const [open,setOpen]=useState(false);
+  return(
+    <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:13,overflow:"hidden"}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,padding:"12px 13px"}}>
+        <div style={{width:44,height:44,borderRadius:9,flexShrink:0,background:`linear-gradient(135deg,${song.color1||"#183a58"},${song.color2||"#2a6090"})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,boxShadow:"0 2px 8px rgba(0,0,0,.18)"}}>{song.emoji||"🎵"}</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{color:T.text,fontSize:13,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{song.title||"Unknown"}</div>
+          <div style={{color:T.textSub,fontSize:11,marginTop:2}}>{song.artist||""}</div>
+          {song.reason&&<div style={{color:T.textSub,fontSize:10,marginTop:1,opacity:.7}}>{song.reason}</div>}
+        </div>
+        <button onClick={()=>setOpen(o=>!o)} style={{width:30,height:30,borderRadius:"50%",border:"none",cursor:"pointer",background:open?T.accentBg:"transparent",color:T.accent,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"background .15s"}}>
+          {open?<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>:<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>}
+        </button>
+      </div>
+      <div style={{maxHeight:open?120:0,overflow:"hidden",transition:"max-height .28s ease"}}>
+        <div style={{display:"flex",gap:6,padding:"0 13px 11px",flexWrap:"wrap"}}>
+          {PLATFORMS.map(p=><a key={p.id} href={p.url(song.title||"",song.artist||"")} target="_blank" rel="noopener noreferrer" style={{padding:"3px 10px",borderRadius:999,background:"transparent",border:`1px solid ${p.color}44`,color:p.color,textDecoration:"none",fontSize:11,fontWeight:500}}>{p.label}</a>)}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+/* ── PLAN ITEM ── */
+const PlanItem=memo(({plan,done,onToggle,T,L,delay=0})=>{
+  const SCOPE={today:L.scopeToday,week:L.scopeWeek,month:L.scopeMonth,year:L.scopeYear};
+  return(
+    <div onClick={onToggle} style={{display:"flex",gap:10,padding:"12px 13px",background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:12,cursor:onToggle?"pointer":"default",opacity:done?.78:1,transition:"opacity .2s",animation:`fadeUp .3s ease ${delay}s both`}}>
+      {onToggle&&<div style={{width:17,height:17,borderRadius:4,flexShrink:0,marginTop:1,border:`2px solid ${done?T.accent:T.cardBorder}`,background:done?T.accentBg:"transparent",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .2s"}}>
+        {done&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={T.accent} strokeWidth="3.5" strokeLinecap="round"><path d="M20 6L9 17l-5-5"/></svg>}
+      </div>}
+      <div style={{flex:1}}>
+        <div style={{color:done?T.textSub:T.text,fontSize:13,fontWeight:500,textDecoration:done?"line-through":"none",transition:"color .2s"}}>
+          {plan.scope&&<span style={{fontSize:9,color:T.textSub,marginRight:6,background:T.tagBg,padding:"1px 5px",borderRadius:4}}>{SCOPE[plan.scope]||plan.scope}</span>}
+          {plan.title||""}
+        </div>
+        <div style={{color:T.textSub,fontSize:12,marginTop:3,lineHeight:1.55}}>{plan.desc||""}</div>
+        {plan.link&&<a href={plan.link} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{display:"inline-block",marginTop:5,fontSize:11,color:"#e05555",background:"rgba(224,85,85,.08)",padding:"2px 8px",borderRadius:5,textDecoration:"none",border:"1px solid rgba(224,85,85,.16)"}}>{L.viewLink}</a>}
+      </div>
+    </div>
+  );
+});
+
+/* ── CALENDAR ── */
+const CalendarView=memo(({records,T,L,onDeleteSong,onDeletePlan})=>{
+  const now=new Date();
+  const [yr,setYr]=useState(now.getFullYear());
+  const [mo,setMo]=useState(now.getMonth()+1);
+  const [sel,setSel]=useState(null);
+  const days=new Date(yr,mo,0).getDate();
+  const first=new Date(yr,mo-1,1).getDay();
+  const cells=Array.from({length:first+days},(_,i)=>i<first?null:i-first+1);
+  const moKey=d=>d?`${yr}-${pad2(mo)}-${pad2(d)}`:null;
+  const selRec=sel?records?.[moKey(sel)]:null;
+  const moRecs=Object.keys(records||{}).filter(k=>k.startsWith(`${yr}-${pad2(mo)}`));
+  const prevMo=()=>{
+    if(mo===1){setMo(12);setYr(y=>y-1);}else{setMo(m=>m-1);}
+    setSel(null);
+  };
+  const nextMo=()=>{
+    if(mo===12){setMo(1);setYr(y=>y+1);}else{setMo(m=>m+1);}
+    setSel(null);
+  };
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <span style={{color:T.text,fontSize:14,fontWeight:600}}>{yr}. {pad2(mo)}</span>
+        <div style={{display:"flex",gap:5}}>
+          <button onClick={prevMo} style={{background:T.tagBg,border:`1px solid ${T.cardBorder}`,borderRadius:7,color:T.accent,cursor:"pointer",padding:"4px 12px",fontSize:14,fontFamily:"inherit"}}>‹</button>
+          <button onClick={nextMo} style={{background:T.tagBg,border:`1px solid ${T.cardBorder}`,borderRadius:7,color:T.accent,cursor:"pointer",padding:"4px 12px",fontSize:14,fontFamily:"inherit"}}>›</button>
+        </div>
+      </div>
+      <div style={{color:T.textSub,fontSize:12,textAlign:"center"}}>{L.calInsight(moRecs.length)}</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
+        {["일","월","화","수","목","금","토"].map(d=><div key={d} style={{textAlign:"center",color:T.textDim,fontSize:10,paddingBottom:4}}>{d}</div>)}
+        {cells.map((d,i)=>{
+          const k=moKey(d),rec=d?records?.[k]:null,isToday=k===todayStr(),isSel=sel===d;
+          return(
+            <div key={i} onClick={()=>{if(d)setSel(d===sel?null:d);}} style={{aspectRatio:"1",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",borderRadius:8,cursor:d?"pointer":"default",fontSize:11,background:isSel?T.navActive:rec?T.tagBg:"transparent",border:isToday?`1.5px solid ${T.accent}`:rec?`1px solid ${T.cardBorder}`:"1px solid transparent",color:!d?"transparent":isToday?T.accent:rec?T.text:T.textSub,transition:"all .15s"}}>
+              {d}{rec&&<div style={{width:3,height:3,borderRadius:"50%",background:T.accent,marginTop:1}}/>}
+            </div>
+          );
+        })}
+      </div>
+      {selRec&&(
+        <div style={{background:T.card,border:`1px solid ${T.cardBorder}`,borderRadius:14,padding:"14px",animation:"fadeUp .25s ease both"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <span style={{color:T.text,fontSize:13,fontWeight:600}}>{mo}/{sel}</span>
+            <div style={{display:"flex",gap:6,alignItems:"center"}}>
+              <span style={{background:T.tagBg,padding:"2px 9px",borderRadius:999,color:T.tagText,fontSize:11}}>"{selRec.mood||""}"</span>
+            </div>
+          </div>
+          <p style={{color:T.text,fontSize:12,lineHeight:1.7,marginBottom:12,fontStyle:"italic",borderLeft:`2px solid ${T.accent}`,paddingLeft:10}}>{selRec.seowooMsg||""}</p>
+          {(selRec.songs||[]).length>0&&<div style={{marginBottom:10}}>
+            <div style={{color:T.textDim,fontSize:9,letterSpacing:".1em",marginBottom:6}}>SONGS</div>
+            {(selRec.songs||[]).map((s,i)=>(
+              <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                <span style={{fontSize:12}}>{s.emoji||"🎵"}</span>
+                <span style={{flex:1,color:T.textSub,fontSize:11}}>{s.title} — {s.artist}</span>
+                {onDeleteSong&&<div onClick={()=>onDeleteSong("confirm","song",moKey(sel),i)} style={{cursor:"pointer",color:"#e05555",fontSize:14,padding:"0 4px"}}>×</div>}
+              </div>
+            ))}
+          </div>}
+          <div style={{color:T.textDim,fontSize:9,letterSpacing:".1em",marginBottom:6}}>PLANS</div>
+          {(selRec.plans||[]).map((p,i)=>(
+            <div key={i} style={{display:"flex",gap:8,alignItems:"center",marginBottom:5}}>
+              <div style={{width:12,height:12,borderRadius:3,flexShrink:0,background:(selRec.plansDone||[])[i]?T.accentBg:"transparent",border:`1.5px solid ${T.cardBorder}`}}/>
+              <span style={{flex:1,color:T.textSub,fontSize:12,textDecoration:(selRec.plansDone||[])[i]?"line-through":"none"}}>{p.title||""}</span>
+              {onDeletePlan&&<div onClick={()=>onDeletePlan("confirm","plan",moKey(sel),i)} style={{cursor:"pointer",color:"#e05555",fontSize:14,padding:"0 4px"}}>×</div>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
+
+/* ── FIX 2: PLANS VIEW — added todayKey to useMemo deps ── */
+const PlansView=memo(({records,T,L,onToggle,editMode,onDeletePlan})=>{
+  const [tab,setTab]=useState("today");
+  const todayKey=todayStr();
+  const todayRec=records?.[todayKey];
+
+  const weekKeys=useMemo(()=>{
+    const keys=[];
+    const now=new Date();
+    for(let i=0;i<7;i++){const d=new Date(now);d.setDate(d.getDate()-i);const k=dateStr(d);if(records?.[k])keys.unshift(k);}
+    return keys;
+  },[records,todayKey]);
+
+  const monthKeys=useMemo(()=>{
+    const now=new Date();
+    return Object.keys(records||{}).filter(k=>k.startsWith(`${now.getFullYear()}-${pad2(now.getMonth()+1)}`)).sort();
+  },[records,todayKey]);
+
+  const empty=<div style={{color:T.textSub,fontSize:13,textAlign:"center",padding:"32px 0"}}>{L.noRecord}</div>;
+  const renderDay=dk=>{
+    const rec=records?.[dk];
+    if(!rec||!rec.plans||rec.plans.length===0)return null;
+    const isT=dk===todayKey;
+    const parts=dk.split("-");
+    const m=parseInt(parts[1]);const d=parseInt(parts[2]);
+    return(
+      <div key={dk} style={{marginBottom:18}}>
+        <div style={{color:T.textDim,fontSize:11,marginBottom:8}}>{isT?L.today:`${m}/${d}`} · "{rec.mood||""}"</div>
+        <div style={{display:"flex",flexDirection:"column",gap:7}}>
+          {rec.plans.map((p,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:4}}>
+              <div style={{flex:1}}><PlanItem key={i} plan={p} done={(rec.plansDone||[])[i]} onToggle={isT?()=>onToggle(dk,i):null} T={T} L={L} delay={i*0.08}/></div>
+              {editMode&&<div onClick={()=>onDeletePlan("confirm","plan",dk,i)} style={{cursor:"pointer",color:"#e05555",fontSize:14,padding:"4px",flexShrink:0}}>×</div>}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{display:"flex",gap:4}}>
+        {[{id:"today",label:L.today},{id:"week",label:L.week},{id:"month",label:L.month}].map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"7px 0",borderRadius:999,border:"none",cursor:"pointer",fontFamily:"inherit",background:tab===t.id?T.navActive:"transparent",color:tab===t.id?T.navActiveText:T.textSub,fontSize:12,fontWeight:tab===t.id?600:400,transition:"all .15s"}}>{t.label}</button>
+        ))}
+      </div>
+      <div style={{overflowY:"auto",maxHeight:"52vh"}}>
+        {tab==="today"&&(todayRec?renderDay(todayKey):empty)}
+        {tab==="week"&&(weekKeys.length>0?weekKeys.map(dk=>renderDay(dk)):empty)}
+        {tab==="month"&&(monthKeys.length>0?monthKeys.map(dk=>renderDay(dk)):empty)}
+      </div>
+    </div>
+  );
+});
+
+/* ── FIX 2: STATS — moved `now` inside useMemo, added todayKey dep ── */
+const StatsPanel=memo(({records,T,L})=>{
+  const todayKey=todayStr();
+
+  const mkeys=useMemo(()=>{
+    const now=new Date();
+    return Object.keys(records||{}).filter(k=>k.startsWith(`${now.getFullYear()}-${pad2(now.getMonth()+1)}`));
+  },[records,todayKey]);
+
+  const moodCount=useMemo(()=>{const c={};mkeys.forEach(k=>{const m=records?.[k]?.mood;if(m)c[m]=(c[m]||0)+1;});return Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,5);},[mkeys,records]);
+  const planStat=useMemo(()=>{let tot=0,dn=0;mkeys.forEach(k=>{const r=records?.[k];if(!r||!r.plans)return;tot+=r.plans.length;dn+=(r.plansDone||[]).filter(Boolean).length;});return{total:tot,done:dn,pct:tot?Math.round(dn/tot*100):0};},[mkeys,records]);
+  const genres=useMemo(()=>{const c={};mkeys.forEach(k=>{(records?.[k]?.songs||[]).forEach(s=>{if(s.genre)c[s.genre]=(c[s.genre]||0)+1;})});return Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,4);},[mkeys,records]);
+  const maxM=moodCount.length>0?moodCount[0][1]:1;
+  if(mkeys.length===0)return<div style={{textAlign:"center",color:T.textSub,fontSize:13,padding:"32px 0"}}>{L.statsEmpty}</div>;
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:20}}>
+      <div>
+        <div style={{color:T.sectionLabel,fontSize:10,letterSpacing:".12em",marginBottom:10,textTransform:"uppercase"}}>{L.moodFreq}</div>
+        {moodCount.map(([m,cnt])=>(
+          <div key={m} style={{display:"flex",alignItems:"center",gap:9,marginBottom:7}}>
+            <div style={{color:T.textSub,fontSize:11,width:80,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m}</div>
+            <div style={{flex:1,height:6,borderRadius:3,background:T.statBar,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.round(cnt/maxM*100)}%`,background:T.statFill,borderRadius:3,transition:"width .6s ease"}}/></div>
+            <div style={{color:T.textDim,fontSize:11,width:16,textAlign:"right"}}>{cnt}</div>
+          </div>
+        ))}
+      </div>
+      <div>
+        <div style={{color:T.sectionLabel,fontSize:10,letterSpacing:".12em",marginBottom:10,textTransform:"uppercase"}}>{L.planRate}</div>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <div style={{position:"relative",width:60,height:60,flexShrink:0}}>
+            <svg width="60" height="60" viewBox="0 0 60 60">
+              <circle cx="30" cy="30" r="24" fill="none" stroke={T.statBar} strokeWidth="6"/>
+              <circle cx="30" cy="30" r="24" fill="none" stroke={T.statFill} strokeWidth="6"
+                strokeDasharray={`${(2*Math.PI*24*planStat.pct/100).toFixed(2)} ${(2*Math.PI*24).toFixed(2)}`}
+                strokeLinecap="round" transform="rotate(-90 30 30)" style={{transition:"stroke-dasharray .7s ease"}}/>
+            </svg>
+            <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:T.text,fontSize:12,fontWeight:600}}>{planStat.pct}%</div>
+          </div>
+          <div>
+            <div style={{color:T.text,fontSize:14,fontWeight:500}}>{planStat.done}/{planStat.total}</div>
+            <div style={{color:T.textSub,fontSize:11,marginTop:2}}>{L.completedPlans}</div>
+          </div>
+        </div>
+      </div>
+      {genres.length>0&&(
+        <div>
+          <div style={{color:T.sectionLabel,fontSize:10,letterSpacing:".12em",marginBottom:10,textTransform:"uppercase"}}>{L.genreLabel}</div>
+          <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+            {genres.map(([g,cnt])=>(
+              <div key={g} style={{padding:"4px 11px",borderRadius:999,background:T.accentBg,border:`1px solid ${T.cardBorder}`,color:T.accent,fontSize:11}}>
+                {g} <span style={{color:T.textSub,fontSize:10}}>x{cnt}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <div style={{color:T.textDim,fontSize:11,textAlign:"center"}}>{L.monthTotal(mkeys.length)}</div>
+    </div>
+  );
+});
+
+/* ── SETTINGS PANEL — icon-based ── */
+const SettingsPanel=memo(({T,lang,setLang,themeKey,setThemeKey,mbti,setMbti,onClose,onSave,L})=>{
+  const [lLang,setLLang]=useState(lang);
+  const [lTheme,setLTheme]=useState(themeKey);
+  const [lMbti,setLMbti]=useState(mbti);
+  const LL=I18N[lLang]||I18N.ko;
+  const TT=lTheme==="dark"?DARK:LIGHT;
+  const save=()=>{setLang(lLang);setThemeKey(lTheme);setMbti(lMbti);onSave(lLang,lTheme,lMbti);onClose();};
+  /* SVG icons */
+  const PaletteIcon=<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TT.accent} strokeWidth="1.8" strokeLinecap="round"><path d="M12 2a10 10 0 00-1 19.95C12.28 22 14 20.21 14 18v-.5a1.5 1.5 0 011.5-1.5H18a4 4 0 004-4c0-5.04-4.48-10-10-10z"/><circle cx="8" cy="10" r="1.5" fill={TT.accent}/><circle cx="12" cy="7" r="1.5" fill={TT.accent}/><circle cx="16" cy="10" r="1.5" fill={TT.accent}/></svg>;
+  const GlobeIcon=<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={TT.accent} strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>;
+  const MbtiIcon=<svg width="18" height="18" viewBox="0 0 24 24" fill={TT.accentBg} stroke={TT.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>;
+  return(
+    <div style={{position:"fixed",inset:0,zIndex:60,display:"flex",flexDirection:"column",justifyContent:"flex-end"}} onClick={onClose}>
+      <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,.42)"}}/>
+      <div onClick={e=>e.stopPropagation()} style={{position:"relative",background:TT.sheetBg,border:`1px solid ${TT.sheetBorder}`,borderRadius:"22px 22px 0 0",padding:"18px 22px 42px",backdropFilter:"blur(22px)",animation:"sheetUp .25s ease both"}}>
+        <div style={{width:36,height:4,borderRadius:2,background:TT.cardBorder,margin:"0 auto 18px"}}/>
+
+        {/* Theme — palette icon */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 0",borderBottom:`1px solid ${TT.divider}`}}>
+          {PaletteIcon}
+          <div style={{display:"flex",gap:6}}>
+            {["dark","light"].map(t=>(
+              <button key={t} onClick={()=>setLTheme(t)} style={{padding:"5px 13px",borderRadius:999,border:`1px solid ${lTheme===t?TT.accent+"66":TT.cardBorder}`,background:lTheme===t?TT.accentBg:"transparent",color:lTheme===t?TT.accent:TT.textSub,fontSize:12,cursor:"pointer",fontFamily:"inherit",fontWeight:lTheme===t?600:400,transition:"all .15s"}}>
+                {t==="dark"?"Dark":"Light"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Language — globe icon */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 0",borderBottom:`1px solid ${TT.divider}`}}>
+          {GlobeIcon}
+          <div style={{display:"flex",gap:5}}>
+            {[["ko","한"],["en","EN"],["zh","中"]].map(([c,n])=>(
+              <button key={c} onClick={()=>setLLang(c)} style={{width:34,height:34,borderRadius:999,border:`1px solid ${lLang===c?TT.accent+"66":TT.cardBorder}`,background:lLang===c?TT.accentBg:"transparent",color:lLang===c?TT.accent:TT.textSub,fontSize:12,cursor:"pointer",fontFamily:"inherit",fontWeight:lLang===c?600:400,transition:"all .15s",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                {n}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* MBTI style — heart/brain icon */}
+        <div style={{padding:"13px 0",borderBottom:`1px solid ${TT.divider}`}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:9}}>
+            {MbtiIcon}
+            <div style={{display:"flex",gap:6}}>
+              {["T","F"].map(v=>(
+                <button key={v} onClick={()=>setLMbti(v)} style={{width:40,height:34,borderRadius:999,border:`1px solid ${lMbti===v?TT.accent+"66":TT.cardBorder}`,background:lMbti===v?TT.accentBg:"transparent",color:lMbti===v?TT.accent:TT.textSub,fontSize:13,cursor:"pointer",fontFamily:"inherit",fontWeight:lMbti===v?600:400,transition:"all .15s",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  {v}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{color:TT.textSub,fontSize:11,lineHeight:1.55,background:TT.tagBg,padding:"8px 12px",borderRadius:10}}>
+            {lMbti==="T"?LL.mbtiTDesc:LL.mbtiFDesc}
+          </div>
+        </div>
+        <button onClick={save} style={{marginTop:20,width:"100%",padding:"12px",background:TT.btnPrimary,border:"none",borderRadius:12,color:TT.btnText,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{LL.save}</button>
+      </div>
+    </div>
+  );
+});
+
+/* ── TOP PULL PANEL ── */
+const TopPanel=({T,L,records,onTogglePlan,onDeleteSong,onDeletePlan})=>{
+  const [open,setOpen]=useState(false);
+  const [subTab,setSubTab]=useState("calendar");
+  const [pullY,setPullY]=useState(0);
+  const [editMode,setEditMode]=useState(false);
+  const [delConfirm,setDelConfirm]=useState(null);
+  const TRIGGER=60;
+  const PANEL_H=400;
+
+  /* Use refs to avoid stale closures in drag handlers */
+  const dragRef=useRef({startY:null,currentPull:0,isOpen:false,dragging:false});
+  useEffect(()=>{dragRef.current.isOpen=open;},[open]);
+
+  const startDrag=(clientY)=>{
+    dragRef.current.startY=clientY;
+    dragRef.current.currentPull=0;
+    dragRef.current.dragging=true;
+  };
+  const moveDrag=(clientY)=>{
+    const dr=dragRef.current;
+    if(dr.startY===null)return;
+    const dy=clientY-dr.startY;
+    let newPull=0;
+    if(!dr.isOpen&&dy>0)newPull=Math.min(dy,TRIGGER+20);
+    if(dr.isOpen&&dy<0)newPull=Math.max(dy,-30);
+    dr.currentPull=newPull;
+    setPullY(newPull);
+  };
+  const endDrag=()=>{
+    const dr=dragRef.current;
+    if(!dr.dragging)return;
+    const pull=dr.currentPull;
+    if(!dr.isOpen&&pull>TRIGGER)setOpen(true);
+    if(dr.isOpen&&pull<-20)setOpen(false);
+    dr.startY=null;
+    dr.currentPull=0;
+    dr.dragging=false;
+    setPullY(0);
+  };
+
+  /* Touch handlers */
+  const onTouchStart=(e)=>startDrag(e.touches[0].clientY);
+  const onTouchMove=(e)=>moveDrag(e.touches[0].clientY);
+  const onTouchEnd=()=>endDrag();
+
+  /* Mouse handler — attaches move/up to window so drag works even if cursor leaves element */
+  const onMouseDown=(e)=>{
+    e.preventDefault();
+    startDrag(e.clientY);
+    const onMove=(mv)=>moveDrag(mv.clientY);
+    const onUp=()=>{
+      endDrag();
+      window.removeEventListener("mousemove",onMove);
+      window.removeEventListener("mouseup",onUp);
+    };
+    window.addEventListener("mousemove",onMove);
+    window.addEventListener("mouseup",onUp);
+  };
+
+  const ty=open?Math.max(pullY,0):-PANEL_H+Math.max(pullY*1.1,0);
+  const dragHandlers={onTouchStart,onTouchMove,onTouchEnd,onMouseDown};
+
+  return(
+    <>
+      {/* Sliding panel */}
+      <div style={{position:"fixed",top:0,left:0,right:0,zIndex:35,transform:`translateY(${ty}px)`,transition:pullY===0?"transform .38s cubic-bezier(.22,.88,.22,1)":"none",willChange:"transform"}}>
+        <div style={{background:T.sheetBg,border:`1px solid ${T.sheetBorder}`,borderRadius:"0 0 20px 20px",padding:"14px 18px 10px",backdropFilter:"blur(22px)",height:PANEL_H,overflowY:"auto"}}>
+          <div style={{display:"flex",gap:5,marginBottom:12}}>
+            {[{id:"calendar",label:L.calendar},{id:"plans",label:L.plans},{id:"stats",label:L.stats}].map(t=>(
+              <button key={t.id} onClick={()=>{setSubTab(t.id);setEditMode(false);}} style={{flex:1,padding:"7px 0",borderRadius:999,border:"none",cursor:"pointer",fontFamily:"inherit",background:subTab===t.id?T.navActive:"transparent",color:subTab===t.id?T.navActiveText:T.textSub,fontSize:12,fontWeight:subTab===t.id?600:400,transition:"all .15s"}}>{t.label}</button>
+            ))}
+          </div>
+          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:10}}>
+            <div onClick={()=>setEditMode(e=>!e)} style={{cursor:"pointer",display:"flex",alignItems:"center",gap:4,padding:"3px 8px",borderRadius:8,background:editMode?T.accentBg:"transparent",border:editMode?"1px solid "+T.accent+"44":"1px solid transparent",transition:"all .2s"}}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={editMode?T.accent:T.textSub} strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </div>
+          </div>
+          {subTab==="calendar"&&<CalendarView records={records} T={T} L={L} onDeleteSong={editMode?function(a,b,c,d){setDelConfirm({type:b,dk:c,idx:d})}:null} onDeletePlan={editMode?function(a,b,c,d){setDelConfirm({type:b,dk:c,idx:d})}:null}/>}
+          {subTab==="plans"&&<PlansView records={records} T={T} L={L} onToggle={onTogglePlan} editMode={editMode} onDeletePlan={function(a,b,c,d){setDelConfirm({type:b,dk:c,idx:d})}}/>}
+          {subTab==="stats"&&<StatsPanel records={records} T={T} L={L}/>}
+        </div>
+          {delConfirm&&(
+            <div style={{position:"absolute",inset:0,zIndex:40,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.4)",borderRadius:"0 0 20px 20px"}}>
+              <div style={{background:T.sheetBg,border:"1px solid "+T.sheetBorder,borderRadius:14,padding:"18px 20px",maxWidth:220,textAlign:"center",animation:"popIn .2s ease both"}}>
+                <p style={{color:T.text,fontSize:13,marginBottom:16}}>{delConfirm.type==="song"?(L.deleteSong||"Delete this song?"):(L.deletePlan||"Delete this plan?")}</p>
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={()=>setDelConfirm(null)} style={{flex:1,padding:"8px",background:"transparent",border:"1px solid "+T.cardBorder,borderRadius:8,color:T.textSub,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{L.resetNo||"No"}</button>
+                  <button onClick={()=>{if(delConfirm.type==="song")onDeleteSong(delConfirm.dk,delConfirm.idx);else onDeletePlan(delConfirm.dk,delConfirm.idx);setDelConfirm(null);}} style={{flex:1,padding:"8px",background:"#e05555",border:"none",borderRadius:8,color:"#fff",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{L.resetYes||"Yes"}</button>
+                </div>
+              </div>
+            </div>
+          )}
+        {/* Visible drag handle — compact */}
+        <div {...dragHandlers}
+          style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"4px 0 3px",cursor:"grab",background:T.sheetBg,borderRadius:"0 0 10px 10px",boxShadow:"0 4px 14px rgba(0,0,0,.14)",touchAction:"none",userSelect:"none"}}>
+          <div style={{width:32,height:3,borderRadius:2,background:T.handleBg}}/>
+          {!open&&<svg width="10" height="6" viewBox="0 0 10 6" style={{marginTop:2,opacity:.3,animation:"shimmer 2.5s ease-in-out infinite"}}><path d="M1 1l4 4 4-4" stroke={T.accent} strokeWidth="1.5" fill="none" strokeLinecap="round"/></svg>}
+        </div>
+      </div>
+
+      {/* Wider invisible drag zone at top — mouse + touch, sits BELOW panel (zIndex 34) so handle isn't blocked */}
+      {!open&&<div {...dragHandlers}
+        style={{position:"fixed",top:0,left:0,right:0,height:14,zIndex:34,touchAction:"none",cursor:"grab"}}/>}
+
+      {/* Backdrop when open */}
+      {open&&<div onClick={()=>setOpen(false)} style={{position:"fixed",inset:0,zIndex:34,background:"rgba(0,0,0,.3)"}}/>}
+    </>
+  );
+};
+
+/* ══════════════════════════════════════════
+   MAIN APP
+══════════════════════════════════════════ */
+function POTD(){
+  const [themeKey,setThemeKey]=useState("dark");
+  const [langKey,setLangKey]=useState("ko");
+  const [mbti,setMbti]=useState("F");
+  const T=themeKey==="dark"?DARK:LIGHT;
+  const L=I18N[langKey]||I18N.ko;
+
+  const [screen,setScreen]=useState("home");
+  const [records,setRecords]=useState({});
+  const [mood,setMood]=useState("");
+  const [input,setInput]=useState("");
+  const [songs,setSongs]=useState([]);
+  const [plans,setPlans]=useState([]);
+  const [plansDone,setPlansDone]=useState([]);
+  const [smsg,setSmsg]=useState("");
+  const [bearMood,setBearMood]=useState("idle");
+  const [prevMood,setPrevMood]=useState(null);
+  const [show,setShow]=useState(false);
+  const [errMsg,setErrMsg]=useState("");
+  const [settingsOpen,setSettingsOpen]=useState(false);
+  const [inputOpen,setInputOpen]=useState(false);
+  const [convHistory,setConvHistory]=useState([]);
+  const [followUpInput,setFollowUpInput]=useState("");
+  const [followUpLoading,setFollowUpLoading]=useState(false);
+  const [planHistory,setPlanHistory]=useState([]); // array of {plans,plansDone} for swipe
+  const [planPage,setPlanPage]=useState(0); // 0=current, 1,2,...=older
+  const [resetOpen,setResetOpen]=useState(false);
+  const [firstTime,setFirstTime]=useState(true);
+  const inputRef=useRef(null);
+  const showTimer=useRef(null);
+
+  /* Font loading — inject <link> into head for reliable CDN font loading */
+  useEffect(()=>{
+    const fontURLs=[
+      'https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap',
+      'https://cdn.jsdelivr.net/gh/fonts-archive/Cafe24Ssurround/subsets/Cafe24Ssurround-dynamic-subset.css',
+    ];
+    const links=fontURLs.map(url=>{
+      const existing=document.querySelector(`link[href="${url}"]`);
+      if(existing)return null;
+      const link=document.createElement('link');
+      link.rel='stylesheet';
+      link.href=url;
+      document.head.appendChild(link);
+      return link;
+    });
+    return()=>links.forEach(l=>l&&l.parentNode&&l.parentNode.removeChild(l));
+  },[]);
+
+  /* FIX 3: Added .catch() and FIX 5: cleanup on unmount */
+  useEffect(()=>{
+    Promise.all([DB.get("records"),DB.get("theme"),DB.get("lang"),DB.get("mbti")]).then(([r,th,ln,mb])=>{
+      if(r){
+        setRecords(r);
+        const y=new Date();y.setDate(y.getDate()-1);
+        const yk=dateStr(y);
+        if(r[yk]&&r[yk].mood)setPrevMood(r[yk].mood);
+      }
+      if(th)setThemeKey(th);
+      if(ln)setLangKey(ln);
+      if(mb)setMbti(mb);
+    }).catch(()=>{});
+    const initTimer=setTimeout(()=>setShow(true),100);
+    return()=>{
+      clearTimeout(initTimer);
+      if(showTimer.current)clearTimeout(showTimer.current);
+    };
+  },[]);
+
+  const goTo=useCallback((nextScreen,resetAll=false)=>{
+    setShow(false);
+    if(showTimer.current)clearTimeout(showTimer.current);
+    showTimer.current=setTimeout(()=>{
+      if(resetAll){
+        setInput("");setMood("");setSongs([]);setPlans([]);
+        setSmsg("");setBearMood("idle");setErrMsg("");
+        setConvHistory([]);setFollowUpInput("");setInputOpen(false);
+        setPlanHistory([]);setPlanPage(0);
+      }
+      setScreen(nextScreen);
+      showTimer.current=setTimeout(()=>setShow(true),60);
+    },260);
+  },[]);
+
+  const goHome=useCallback(()=>goTo("home",true),[goTo]);
+
+  const handleReset=async()=>{
+    setResetOpen(false);
+    var today=todayStr();
+    if(records[today]){
+      var updated={};for(var k in records){if(k!==today)updated[k]=records[k];}
+      setRecords(updated);
+      await DB.set("records",updated);
+    }
+    goTo("home",true);
+  };
+
+  const handleBubbleClick=()=>{
+    setInputOpen(o=>!o);
+    setTimeout(()=>inputRef.current&&inputRef.current.focus(),100);
+  };
+
+  const handleSubmit=async()=>{
+    if(!input.trim())return;
+    const userInput=input.trim();
+    setMood(userInput);setErrMsg("");setBearMood("thinking");setInputOpen(false);
+    goTo("loading");
+    const ctx=Object.keys(records).sort().slice(-3).map(k=>records[k]&&records[k].mood).filter(Boolean).join(", ");
+    try{
+      const parsed=await callSeowoo({userInput,lang:langKey,mbti,contextHint:ctx});
+      const ns=Array.isArray(parsed.songs)?parsed.songs:[];
+      const np=Array.isArray(parsed.plans)?parsed.plans:[];
+      const nm=parsed.seowooSays||"오늘도 잘 해봐.";
+      const nd=new Array(np.length).fill(false);
+      setSongs(ns);setPlans(np);setPlansDone(nd);setSmsg(nm);
+      setBearMood(detectMood(userInput));
+      setConvHistory([{role:"user",content:userInput},{role:"assistant",content:nm}]);
+      const rec={date:todayStr(),mood:userInput,seowooMsg:nm,songs:ns,plans:np,plansDone:nd,savedAt:Date.now()};
+      const updated={...records,[todayStr()]:rec};
+      setRecords(updated);
+      await DB.set("records",updated);
+      setInput("");
+      goTo("result");
+    }catch(e){
+      setErrMsg(L.errMsg);setBearMood("idle");
+      goTo("home");
+    }
+  };
+
+  /* FIX 6: handleFollowUp — shows loading, keeps songs, pushes old plans to history */
+  const handleFollowUp=async()=>{
+    if(!followUpInput.trim()||followUpLoading)return;
+    const q=followUpInput.trim();
+    setFollowUpLoading(true);setFollowUpInput("");setInputOpen(false);
+    // Show loading screen
+    setShow(false);
+    await new Promise(r=>setTimeout(r,200));
+    setScreen("loading");
+    setShow(true);
+    try{
+      const parsed=await callSeowoo({userInput:q,lang:langKey,mbti,contextHint:`Original mood: "${mood}". This is follow-up #${Math.floor(convHistory.length/2)+1}. Build upon previous conversation — deepen analysis, refine plans. Only include new plans. Do NOT include songs unless user specifically asks for music.`,history:convHistory});
+      const np=Array.isArray(parsed.plans)&&parsed.plans.length>0?parsed.plans:plans;
+      const nm=parsed.seowooSays||smsg;
+      const nd=new Array(np.length).fill(false);
+      // Push current plans to history before replacing (only if different)
+      if(plans.length>0&&np!==plans){
+        setPlanHistory(h=>[...h,{plans:[...plans],plansDone:[...plansDone]}]);
+      }
+      // Only update songs if user asked about music
+      if(Array.isArray(parsed.songs)&&parsed.songs.length>0){
+        setSongs(parsed.songs);
+      }
+      setPlans(np);setPlansDone(nd);setSmsg(nm);setPlanPage(0);
+      setConvHistory(h=>[...h,{role:"user",content:q},{role:"assistant",content:nm}]);
+      const existing=records[todayStr()]||{};
+      const allPlans=[...np,...(existing.plans||[])];
+      const allPlansDone=[...nd,...(existing.plansDone||[])];
+      const updated={...records,[todayStr()]:{
+        ...existing,
+        date:existing.date||todayStr(),
+        mood:existing.mood||mood,
+        savedAt:existing.savedAt||Date.now(),
+        seowooMsg:nm,songs:wantsMusic&&Array.isArray(parsed.songs)?parsed.songs:existing.songs||songs,
+        plans:allPlans,plansDone:allPlansDone
+      }};
+      setRecords(updated);await DB.set("records",updated);
+    }catch(e){
+      console.log("[POTD] Follow-up error:",e.message);
+    }
+    setFollowUpLoading(false);
+    // Return to result screen
+    setShow(false);
+    await new Promise(r=>setTimeout(r,200));
+    setScreen("result");
+    setShow(true);
+  };
+
+  const togglePlan=async(dk,idx)=>{
+    const rec=records[dk];if(!rec)return;
+    const nd=[...(rec.plansDone||[])];nd[idx]=!nd[idx];
+    const updated={...records,[dk]:{...rec,plansDone:nd}};
+    if(dk===todayStr())setPlansDone(nd);
+    setRecords(updated);await DB.set("records",updated);
+  };
+
+  const deleteSong=async(dk,idx)=>{
+    const rec=records[dk];if(!rec)return;
+    const ns=[...(rec.songs||[])];ns.splice(idx,1);
+    const updated={...records,[dk]:{...rec,songs:ns}};
+    if(dk===todayStr())setSongs(ns);
+    setRecords(updated);await DB.set("records",updated);
+  };
+
+  const deletePlan=async(dk,idx)=>{
+    const rec=records[dk];if(!rec)return;
+    const np=[...(rec.plans||[])];np.splice(idx,1);
+    const nd=[...(rec.plansDone||[])];nd.splice(idx,1);
+    const updated={...records,[dk]:{...rec,plans:np,plansDone:nd}};
+    if(dk===todayStr()){setPlans(np);setPlansDone(nd);}
+    setRecords(updated);await DB.set("records",updated);
+  };
+
+  const saveSettings=async(ln,th,mb)=>{
+    await Promise.all([DB.set("theme",th),DB.set("lang",ln),DB.set("mbti",mb)]);
+  };
+
+  const FONT_BY_LANG={
+    ko:"'Jua','Quicksand',system-ui,sans-serif",
+    en:"'Baloo 2','Quicksand',system-ui,sans-serif",
+    zh:"'ZCOOL KuaiLe','Quicksand',system-ui,'PingFang SC','Microsoft YaHei',sans-serif",
+  };
+  const isHome=screen==="home";
+  const isResult=screen==="result";
+  const isLoading=screen==="loading";
+
+  return(
+    <div style={{minHeight:"100vh",background:`linear-gradient(158deg,${T.bg} 0%,${T.bg2} 55%,${T.bg3} 100%)`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",position:"relative",overflow:"hidden",fontFamily:FONT_BY_LANG[langKey]||FONT_BY_LANG.ko,transition:"background .4s ease"}}>
+      {/* FIX 1: snowDrift keyframe — no opacity animation, preserves inline opacity */}
+      <style>{`
+        *{box-sizing:border-box;margin:0;padding:0;}
+        ::-webkit-scrollbar{display:none;}
+        input::placeholder{color:rgba(100,150,180,.3);}
+        @keyframes bearFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(11px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes popIn{0%{transform:scale(.88);opacity:0}70%{transform:scale(1.02)}100%{transform:scale(1);opacity:1}}
+        @keyframes blink{0%,80%,100%{opacity:.18}40%{opacity:.7}}
+        @keyframes shimmer{0%,100%{opacity:.18}50%{opacity:.38}}
+        @keyframes sheetUp{from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1}}
+        @keyframes snowDrift{0%{transform:translateY(-30px) rotate(0deg)}100%{transform:translateY(110vh) rotate(360deg)}}
+        @keyframes curiousTilt{0%{transform:translateY(0) rotate(0deg) scale(1)}30%{transform:translateY(-6px) rotate(-4deg) scale(1.08)}60%{transform:translateY(-3px) rotate(2deg) scale(1.06)}100%{transform:translateY(0) rotate(0deg) scale(1.05)}}
+        button:focus,a:focus{outline:none;}
+      `}</style>
+
+      <Snow isDark={themeKey==="dark"}/>
+      <div style={{position:"absolute",top:"38%",left:"50%",transform:"translate(-50%,-50%)",width:420,height:420,borderRadius:"50%",pointerEvents:"none",background:`radial-gradient(circle,${themeKey==="dark"?"rgba(28,68,130,.07)":"rgba(80,150,220,.05)"} 0%,transparent 70%)`}}/>
+
+      <TopPanel T={T} L={L} records={records} onTogglePlan={togglePlan} onDeleteSong={deleteSong} onDeletePlan={deletePlan}/>
+
+      {!(isResult&&inputOpen)&&<button onClick={()=>setSettingsOpen(true)} style={{position:"fixed",top:20,right:16,zIndex:30,background:T.tagBg,border:`1px solid ${T.cardBorder}`,borderRadius:9,padding:"8px",color:T.accent,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .2s",width:34,height:34}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+        </svg>
+      </button>}
+
+      {/* Reset button — left of settings */}
+      {isResult&&!inputOpen&&(
+        <button onClick={()=>setResetOpen(true)} style={{position:"fixed",top:20,right:58,zIndex:30,background:T.tagBg,border:`1px solid ${T.cardBorder}`,borderRadius:9,padding:"8px",color:T.textSub,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .2s",width:34,height:34}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 12a9 9 0 019-9 9.75 9.75 0 016.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 01-9 9 9.75 9.75 0 01-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
+        </button>
+      )}
+
+      {/* Reset confirmation dialog */}
+      {resetOpen&&(
+        <div style={{position:"fixed",inset:0,zIndex:55,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setResetOpen(false)}>
+          <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,.42)"}}/>
+          <div onClick={e=>e.stopPropagation()} style={{position:"relative",background:T.sheetBg,border:`1px solid ${T.sheetBorder}`,borderRadius:18,padding:"24px 22px 20px",backdropFilter:"blur(22px)",animation:"popIn .25s ease both",maxWidth:260,textAlign:"center"}}>
+            <div style={{marginBottom:18}}>
+              <PolarBear size={64} mood="sad"/>
+            </div>
+            <p style={{color:T.text,fontSize:13,lineHeight:1.7,marginBottom:20,whiteSpace:"pre-line"}}>{L.resetConfirm}</p>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setResetOpen(false)} style={{flex:1,padding:"10px",background:"transparent",border:`1px solid ${T.cardBorder}`,borderRadius:10,color:T.textSub,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>{L.resetNo}</button>
+              <button onClick={handleReset} style={{flex:1,padding:"10px",background:T.btnPrimary,border:"none",borderRadius:10,color:T.btnText,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{L.resetYes}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isResult&&!inputOpen&&(
+        <button onClick={goHome} style={{position:"fixed",top:20,left:16,zIndex:30,background:T.tagBg,border:`1px solid ${T.cardBorder}`,borderRadius:9,padding:"8px",color:T.textSub,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .2s",width:34,height:34}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        </button>
+      )}
+
+      <div style={{transition:"opacity .3s ease, transform .3s ease",opacity:show?1:0,transform:show?"translateY(0)":"translateY(10px)",display:"flex",flexDirection:"column",alignItems:"center",zIndex:10,width:"100%",maxWidth:400,padding:"64px 18px 50px",overflowY:"auto",maxHeight:"100vh"}}>
+
+        {isHome&&(
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:0,width:"100%"}}>
+            <div style={{animation:"popIn .4s ease .2s both",marginBottom:inputOpen?12:22,cursor:"pointer",width:"100%",maxWidth:280,display:"flex",justifyContent:"center"}} onClick={handleBubbleClick}>
+              <SpeechBubble text={L.greeting(prevMood)} T={T} style={{cursor:"pointer"}}/>
+            </div>
+            <div style={{width:"100%",maxWidth:280,maxHeight:inputOpen?120:0,overflow:"hidden",transition:"max-height .35s cubic-bezier(.22,.88,.22,1),opacity .25s ease",opacity:inputOpen?1:0,marginBottom:inputOpen?10:0}}>
+              <div style={{background:T.inputPanel,border:`1.5px solid ${T.inputBorder}`,borderRadius:16,padding:"12px 14px",backdropFilter:"blur(16px)"}}>
+                <input ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")handleSubmit();}} placeholder={L.placeholder}
+                  style={{width:"100%",background:"transparent",border:"none",color:T.text,fontSize:14,outline:"none",fontFamily:"inherit",marginBottom:9}}/>
+                <button onClick={handleSubmit} style={{width:"100%",padding:"9px",background:T.btnPrimary,border:"none",borderRadius:11,color:T.btnText,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                  {L.submitBtn}
+                </button>
+              </div>
+            </div>
+            <div style={{animation:"bearFloat 5s ease-in-out infinite"}}>
+              <PolarBear size={210} mood="idle"/>
+            </div>
+            {errMsg&&<div style={{color:"#e05555",fontSize:12,marginTop:10,textAlign:"center"}}>{errMsg}</div>}
+            {!inputOpen&&<div style={{marginTop:20,color:T.textDim,fontSize:11,letterSpacing:".1em",animation:"shimmer 3s ease-in-out infinite"}}>{L.touchStart}</div>}
+          </div>
+        )}
+
+        {isLoading&&(
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
+            <div style={{animation:"popIn .3s ease both",marginBottom:12,display:"flex",justifyContent:"center"}}>
+              <SpeechBubble text={followUpLoading?L.followUpLoading:L.loadingBubble} T={T}/>
+            </div>
+            <div style={{animation:"bearFloat 5s ease-in-out infinite"}}>
+              <PolarBear size={180} mood="thinking"/>
+            </div>
+          </div>
+        )}
+
+        {isResult&&(
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",width:"100%",paddingTop:inputOpen?0:8}}>
+            {/* Seowoo speech bubble — shows comfort msg or follow-up ask */}
+            <div style={{animation:"popIn .38s ease both",marginBottom:inputOpen?8:14,marginTop:inputOpen?0:36,width:"100%",display:"flex",justifyContent:"center",cursor:"pointer"}} onClick={handleBubbleClick}>
+              <SpeechBubble text={inputOpen?L.followUpAsk:smsg} T={T} style={{cursor:"pointer",maxWidth:180,fontSize:12}}/>
+            </div>
+
+            {/* Follow-up input */}
+            <div style={{width:"100%",maxWidth:300,maxHeight:inputOpen?90:0,overflow:"visible",transition:"max-height .32s cubic-bezier(.22,.88,.22,1),opacity .25s ease",opacity:inputOpen?1:0,marginBottom:inputOpen?12:0}}>
+              <div style={{background:T.inputPanel,border:`1.5px solid ${T.inputBorder}`,borderRadius:14,padding:"10px 13px",display:"flex",gap:8,backdropFilter:"blur(16px)",width:"100%",boxSizing:"border-box"}}>
+                <input ref={inputRef} value={followUpInput} onChange={e=>setFollowUpInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")handleFollowUp();}} placeholder={L.followUp}
+                  style={{flex:1,background:"transparent",border:"none",color:T.text,fontSize:13,outline:"none",fontFamily:"inherit"}}/>
+                <button onClick={handleFollowUp} disabled={followUpLoading} style={{padding:"6px 13px",background:T.btnPrimary,border:"none",borderRadius:10,color:T.btnText,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",opacity:followUpLoading?.6:1,flexShrink:0}}>
+                  {followUpLoading?"…":L.send}
+                </button>
+              </div>
+            </div>
+
+            {/* Seowoo bear — bigger + curious tilt when follow-up mode */}
+            <div style={{animation:inputOpen?"curiousTilt .6s ease forwards":"bearFloat 5s ease-in-out infinite",marginBottom:inputOpen?6:10,transition:"all .3s ease"}} onClick={!inputOpen?handleBubbleClick:undefined}>
+              <PolarBear size={inputOpen?160:128} mood="idle"/>
+            </div>
+
+            {/* Content below — hidden during follow-up mode for focus */}
+            {!inputOpen&&<>
+              <div style={{padding:"3px 12px",borderRadius:999,marginBottom:14,background:T.tagBg,border:`1px solid ${T.tagBorder}`}}>
+                <span style={{color:T.textSub,fontSize:11}}>{L.moodLabel}  </span>
+                <span style={{color:T.tagText,fontSize:12,fontWeight:600}}>"{mood}"</span>
+              </div>
+              <div style={{width:"100%",marginBottom:14}}>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={T.accent} strokeWidth="2" strokeLinecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span style={{color:T.accent,fontSize:11,fontWeight:600,letterSpacing:".1em",textTransform:"uppercase"}}>{L.music}</span></div>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {songs.map((s,i)=>(
+                    <div key={i} style={{animation:`fadeUp .28s ease ${i*0.09}s both`}}>
+                      <SongCard song={s} T={T}/>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div style={{width:"60%",height:1,background:T.divider,margin:"4px auto 18px"}}/>
+              <div style={{width:"100%"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={T.accent} strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg><span style={{color:T.accent,fontSize:11,fontWeight:600,letterSpacing:".1em",textTransform:"uppercase"}}>{L.plan}</span></div>
+                  {planHistory.length>0&&(
+                    <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                      <div onClick={()=>setPlanPage(p=>Math.min(p+1,planHistory.length))} style={{cursor:"pointer",color:T.accent,fontSize:14,opacity:planPage<planHistory.length?.8:.2}}>‹</div>
+                      {planHistory.map((_,i)=>(
+                        <div key={i} onClick={()=>setPlanPage(i+1)} style={{width:6,height:6,borderRadius:"50%",background:planPage===i+1?T.accent:T.cardBorder,cursor:"pointer",transition:"background .2s"}}/>
+                      ))}
+                      <div onClick={()=>setPlanPage(0)} style={{width:6,height:6,borderRadius:"50%",background:planPage===0?T.accent:T.cardBorder,cursor:"pointer",transition:"background .2s"}}/>
+                      <div onClick={()=>setPlanPage(p=>Math.max(p-1,0))} style={{cursor:"pointer",color:T.accent,fontSize:14,opacity:planPage>0?.8:.2}}>›</div>
+                    </div>
+                  )}
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                  {planPage===0?
+                    plans.map((p,i)=>(
+                      <PlanItem key={i} plan={p} done={plansDone[i]} onToggle={()=>togglePlan(todayStr(),i)} T={T} L={L} delay={i*0.1+0.15}/>
+                    ))
+                    :planHistory[planPage-1]&&planHistory[planPage-1].plans.map((p,i)=>(
+                      <PlanItem key={i} plan={p} done={(planHistory[planPage-1].plansDone||[])[i]} onToggle={null} T={T} L={L} delay={i*0.08}/>
+                    ))
+                  }
+                </div>
+              </div>
+            </>}
+          </div>
+        )}
+      </div>
+
+      <div style={{position:"fixed",bottom:14,left:"50%",transform:"translateX(-50%)",color:T.watermark,zIndex:5,pointerEvents:"none",display:"flex",flexDirection:"column",alignItems:"center",gap:1}}>
+        <span style={{fontSize:11,fontWeight:700,letterSpacing:".22em"}}>POTD</span>
+        <span style={{fontSize:8,letterSpacing:".1em",opacity:.6}}>Plan Of The Day</span>
+      </div>
+
+      {firstTime&&!isLoading&&!isResult&&(
+        <div onClick={()=>setFirstTime(false)} style={{position:"fixed",inset:0,zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,.55)",cursor:"pointer"}}>
+          <div style={{background:T.sheetBg,border:"1px solid "+T.sheetBorder,borderRadius:20,padding:"28px 24px 22px",maxWidth:270,textAlign:"center",backdropFilter:"blur(16px)",animation:"popIn .4s ease .2s both"}}>
+            <PolarBear size={72} mood="excited"/>
+            <p style={{color:T.text,fontSize:14,fontWeight:600,marginTop:12,marginBottom:6}}>{langKey==="en"?"Hi! I'm Seowoo":langKey==="zh"?"\u563f\uff01\u6211\u662f\u5c0f\u96ea":"안녕! 나는 서우야"}</p>
+            <p style={{color:T.textSub,fontSize:12,lineHeight:1.7,marginBottom:16}}>{langKey==="en"?"Tell me how you feel, and I'll make a plan with music just for you.":langKey==="zh"?"\u544a\u8bc9\u6211\u4f60\u7684\u5fc3\u60c5\uff0c\u6211\u4f1a\u4e3a\u4f60\u5236\u5b9a\u8ba1\u5212\u548c\u97f3\u4e50\u63a8\u8350\u3002":"기분을 알려주면 음악이랑 오늘의 플랜을 만들어줄게."}</p>
+            <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14,textAlign:"left"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div style={{width:22,height:22,borderRadius:999,background:T.accentBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontSize:10,color:T.accent,fontWeight:700}}>1</span></div>
+                <span style={{color:T.text,fontSize:11}}>{langKey==="en"?"Tap the speech bubble":langKey==="zh"?"\u70B9\u51FB\u5BF9\u8BDD\u6846":"말풍선을 터치해줘"}</span>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div style={{width:22,height:22,borderRadius:999,background:T.accentBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontSize:10,color:T.accent,fontWeight:700}}>2</span></div>
+                <span style={{color:T.text,fontSize:11}}>{langKey==="en"?"Tell me how you feel":langKey==="zh"?"\u544A\u8BC9\u6211\u4F60\u7684\u5FC3\u60C5":"기분을 적어줘"}</span>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div style={{width:22,height:22,borderRadius:999,background:T.accentBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><span style={{fontSize:10,color:T.accent,fontWeight:700}}>3</span></div>
+                <span style={{color:T.text,fontSize:11}}>{langKey==="en"?"Get music + plan for today":langKey==="zh"?"\u83B7\u53D6\u97F3\u4E50+\u8BA1\u5212":"음악이랑 플랜을 받아줘"}</span>
+              </div>
+            </div>
+            <div style={{color:T.textDim,fontSize:10,letterSpacing:".08em",animation:"shimmer 2.5s ease-in-out infinite"}}>{langKey==="en"?"Tap anywhere to start":langKey==="zh"?"\u70B9\u51FB\u4EFB\u610F\u5904\u5F00\u59CB":"아무 곳이나 터치해서 시작"}</div>
+          </div>
+        </div>
+      )}
+      {settingsOpen&&<SettingsPanel T={T} L={L} lang={langKey} setLang={setLangKey} themeKey={themeKey} setThemeKey={setThemeKey} mbti={mbti} setMbti={setMbti} onClose={()=>setSettingsOpen(false)} onSave={saveSettings}/>}
+    </div>
+  );
+}
+
+
+ReactDOM.createRoot(document.getElementById("root")).render(<POTD/>);
+</script>
+</body>
+</html>
